@@ -1,0 +1,500 @@
+// دليل University — Prisma schema
+// SQLite database, all academic relationships use persistent IDs.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────────────────────
+//  Users & Roles
+// ────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  role          String    @default("STUDENT") // STUDENT | ADMIN
+  status        String    @default("ACTIVE")  // ACTIVE | SUSPENDED | ARCHIVED
+  universityId  String?
+  degreeLevelId String?
+  majorId       String?
+  academicYearId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  university     University?     @relation(fields: [universityId], references: [id], onDelete: SetNull)
+  degreeLevel    DegreeLevel?    @relation(fields: [degreeLevelId], references: [id], onDelete: SetNull)
+  major          Major?          @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  academicYear   AcademicYear?   @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+
+  favorites      Favorite[]
+  recentlyViewed RecentlyViewed[]
+  dismissals     NotificationDismissal[]
+  adDismissals   AdDismissal[]
+  auditLogs      AuditLog[]
+  accounts       Account[]
+  sessions       Session[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  id         String   @id @default(cuid())
+  identifier String
+  token      String   @unique
+  expires    DateTime
+}
+
+// ────────────────────────────────────────────────────────────
+//  Academic Structure
+//  University → DegreeLevel → Major → AcademicYear → Semester → Subject → Lesson
+// ────────────────────────────────────────────────────────────
+
+model University {
+  id          String   @id @default(cuid())
+  name        String
+  nameAr      String?
+  nameFr      String?
+  description String?
+  descriptionAr String?
+  descriptionFr String?
+  city        String?
+  logo        String?  // media path or url
+  coverImage  String?
+  published   Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  faculties          Faculty[]
+  degrees            DegreeLevel[]  // programs offered at this university
+  degreeUniversities DegreeUniversity[]
+  majors             Major[]
+  users              User[]
+  lessons            Lesson[]
+
+  @@index([published])
+}
+
+model Faculty {
+  id           String   @id @default(cuid())
+  name         String
+  nameAr       String?
+  nameFr       String?
+  universityId String
+  published    Boolean  @default(true)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  university   University @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  majors       Major[]
+
+  @@index([universityId])
+}
+
+// DegreeLevel can be linked to many universities (m-n) and many majors
+model DegreeLevel {
+  id          String   @id @default(cuid())
+  name        String   // Licence / Master / ...
+  nameAr      String?
+  nameFr      String?
+  published   Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  universities      University[]      // programs offered at multiple universities (m-n)
+  degreeUniversities DegreeUniversity[]
+  majors            Major[]
+  academicYears     AcademicYear[]
+  users             User[]
+  lessons           Lesson[]
+
+  @@index([published])
+}
+
+// Join table — which universities offer which degree programs
+model DegreeUniversity {
+  id            String   @id @default(cuid())
+  degreeLevelId String
+  universityId  String
+  degreeLevel   DegreeLevel @relation(fields: [degreeLevelId], references: [id], onDelete: Cascade)
+  university    University  @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  @@unique([degreeLevelId, universityId])
+  @@index([universityId])
+  @@index([degreeLevelId])
+}
+
+model Major {
+  id            String   @id @default(cuid())
+  name          String
+  nameAr        String?
+  nameFr        String?
+  description   String?
+  descriptionAr String?
+  descriptionFr String?
+  coverImage    String?
+  published     Boolean  @default(true)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  universityId  String
+  degreeLevelId String
+  facultyId     String?  // optional for backward compat — majors without faculty show in faculty-less lists
+  university    University  @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  degreeLevel   DegreeLevel @relation(fields: [degreeLevelId], references: [id], onDelete: Cascade)
+  faculty       Faculty?    @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  academicYears AcademicYear[]
+  users         User[]
+  lessons       Lesson[]
+
+  @@index([universityId, degreeLevelId])
+  @@index([facultyId])
+  @@index([published])
+}
+
+model AcademicYear {
+  id            String   @id @default(cuid())
+  name          String   // First Year / Second Year / ...
+  nameAr        String?
+  nameFr        String?
+  published     Boolean  @default(true)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  majorId       String
+  degreeLevelId String  // denormalized for query convenience
+  major         Major        @relation(fields: [majorId], references: [id], onDelete: Cascade)
+  degreeLevel   DegreeLevel  @relation(fields: [degreeLevelId], references: [id], onDelete: Cascade)
+  semesters     Semester[]
+  users         User[]
+  lessons       Lesson[]
+
+  @@index([majorId])
+  @@index([degreeLevelId])
+  @@index([published])
+}
+
+model Semester {
+  id             String   @id @default(cuid())
+  name           String   // Semester 1 / Semester 2 / ...
+  nameAr         String?
+  nameFr         String?
+  published      Boolean  @default(true)
+  order          Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  subjects       Subject[]
+  lessons        Lesson[]
+  professors     Professor[]
+
+  @@index([academicYearId])
+  @@index([published])
+}
+
+// ────────────────────────────────────────────────────────────
+//  Professors — scoped per semester.
+//  Navigation: Semester → Professor → Subject → Lesson
+// ────────────────────────────────────────────────────────────
+model Professor {
+  id            String   @id @default(cuid())
+  name          String
+  nameAr        String?
+  nameFr        String?
+  bio           String?
+  bioAr         String?
+  bioFr         String?
+  photo         String?
+  email         String?
+  semesterId    String
+  published     Boolean  @default(true)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  semester      Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  lessons       Lesson[]
+
+  @@index([semesterId])
+  @@index([published])
+}
+
+model Subject {
+  id            String   @id @default(cuid())
+  name          String
+  nameAr        String?
+  nameFr        String?
+  description   String?
+  descriptionAr String?
+  descriptionFr String?
+  coverImage    String?
+  published     Boolean  @default(true)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  semesterId    String
+  semester      Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  lessons       Lesson[]
+
+  @@index([semesterId])
+  @@index([published])
+}
+
+// ────────────────────────────────────────────────────────────
+//  Lessons & Content Blocks
+// ────────────────────────────────────────────────────────────
+
+model Lesson {
+  id            String   @id @default(cuid())
+  title         String
+  titleAr       String?
+  titleFr       String?
+  description   String?
+  descriptionAr String?
+  descriptionFr String?
+  thumbnail     String?
+  status        String   @default("DRAFT") // DRAFT | PUBLISHED | UNPUBLISHED | ARCHIVED
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Exact academic assignment via persistent IDs
+  universityId  String
+  degreeLevelId String
+  majorId       String
+  academicYearId String
+  semesterId    String
+  subjectId     String
+  professorId   String?  // nullable for backward compat with existing lessons
+
+  university    University    @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  degreeLevel   DegreeLevel   @relation(fields: [degreeLevelId], references: [id], onDelete: Cascade)
+  major         Major         @relation(fields: [majorId], references: [id], onDelete: Cascade)
+  academicYear  AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  semester      Semester      @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  subject       Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  professor     Professor?    @relation(fields: [professorId], references: [id], onDelete: SetNull)
+
+  contentBlocks LessonContentBlock[]
+  favorites     Favorite[]
+  recentlyViewed RecentlyViewed[]
+
+  @@index([subjectId, status])
+  @@index([universityId])
+  @@index([majorId])
+  @@index([status])
+  @@index([professorId])
+}
+
+model LessonContentBlock {
+  id        String   @id @default(cuid())
+  lessonId  String
+  order     Int      @default(0)
+  type      String   // text | pdf | uploaded_video | youtube | image | gallery | file | link | notes
+  title     String?
+  content   String?  // text content / notes / link URL / youtube URL
+  mediaPath String?  // path to uploaded file (pdf, video, image, file)
+  mediaPaths String? // JSON string for gallery: ["path1","path2",...]
+  downloadable Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lesson    Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+}
+
+// ────────────────────────────────────────────────────────────
+//  Media Library
+// ────────────────────────────────────────────────────────────
+
+model MediaFile {
+  id         String   @id @default(cuid())
+  filename   String
+  originalName String
+  path       String   // public/uploads/<...>
+  mimeType   String
+  size       Int
+  type       String   // pdf | video | image | document
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([type])
+}
+
+// ────────────────────────────────────────────────────────────
+//  Notifications & Announcements
+// ────────────────────────────────────────────────────────────
+
+model Notification {
+  id          String    @id @default(cuid())
+  title       String
+  content     String
+  imageUrl    String?   // optional image URL — shown as a picture on the notification card + detail modal
+  audienceType String   @default("ALL") // ALL | UNIVERSITY | DEGREE | MAJOR | YEAR | USERS
+  targetIds   String?   // JSON array of IDs based on audienceType
+  showEveryVisit Boolean @default(false)
+  status      String    @default("PUBLISHED") // DRAFT | PUBLISHED | UNPUBLISHED
+  publishAt   DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  dismissals  NotificationDismissal[]
+
+  @@index([status])
+  @@index([audienceType])
+}
+
+model NotificationDismissal {
+  id             String   @id @default(cuid())
+  userId         String
+  notificationId String
+  createdAt      DateTime @default(now())
+
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notification  Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, notificationId])
+}
+
+// ────────────────────────────────────────────────────────────
+//  Student Personal Data
+// ────────────────────────────────────────────────────────────
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  lessonId  String
+  createdAt DateTime @default(now())
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson    Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  @@unique([userId, lessonId])
+  @@index([userId])
+}
+
+model RecentlyViewed {
+  id        String   @id @default(cuid())
+  userId    String
+  lessonId  String
+  viewedAt  DateTime @default(now())
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson    Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  @@index([userId, viewedAt])
+}
+
+// ────────────────────────────────────────────────────────────
+//  Ads — popups (modal after login) + hero banners (under hero on home)
+//  Hero banner ads carry TWO images: imageMobile (phone) and imageDesktop (laptop).
+// ────────────────────────────────────────────────────────────
+
+model Ad {
+  id             String    @id @default(cuid())
+  title          String
+  content        String?   // optional text body
+  type           String    // POPUP | HERO_BANNER
+  imageUrl       String?   // single image for POPUP ads
+  imageMobile    String?   // phone-sized image for HERO_BANNER ads
+  imageDesktop   String?   // laptop-sized image for HERO_BANNER ads
+  linkUrl        String?   // CTA link (clickable)
+  linkTarget     String    @default("_blank") // _blank | _self
+  audienceType   String    @default("ALL") // ALL | UNIVERSITY | DEGREE | MAJOR | YEAR | USERS
+  targetIds      String?   // JSON array of IDs based on audienceType
+  dismissible    Boolean   @default(true) // for POPUP — show close button
+  showEveryLogin Boolean   @default(false) // for POPUP — show on every login vs once
+  status         String    @default("PUBLISHED") // DRAFT | PUBLISHED | UNPUBLISHED | ARCHIVED
+  publishAt      DateTime?
+  expiresAt      DateTime?
+  order          Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  dismissals     AdDismissal[]
+
+  @@index([status, type])
+  @@index([audienceType])
+}
+
+model AdDismissal {
+  id        String   @id @default(cuid())
+  userId    String
+  adId      String
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ad        Ad   @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, adId])
+  @@index([userId])
+}
+
+// ────────────────────────────────────────────────────────────
+//  Website Settings & Audit Log
+// ────────────────────────────────────────────────────────────
+
+model WebsiteSettings {
+  id            String   @id @default(cuid())
+  name          String   @default("دليل University")
+  logo          String?
+  coverImage    String?
+  description   String?
+  defaultLanguage String @default("ar")
+  defaultTheme  String   @default("system") // light | dark | system
+  enabledLanguages String @default("ar,fr,en")
+  contactEmail  String?
+  footerText    String?
+  allowPublicDirectory Boolean @default(true)
+  updatedAt     DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String   // e.g. LESSON_CREATE, USER_SUSPEND
+  entity     String?
+  entityId   String?
+  details    String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([createdAt])
+  @@index([userId])
+}

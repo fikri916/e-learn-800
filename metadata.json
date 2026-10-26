@@ -1,0 +1,8 @@
+{
+  "name": "e-learning",
+  "description": "A complete, modern, multilingual university learning platform where students find, organize, view, and download educational materials according to their university, faculty, degree level, major, academic year, semester, subject, and professor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

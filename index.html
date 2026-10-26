@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>e-learning — University Platform</title>
+    <meta name="description" content="A complete, modern, multilingual university learning platform where students find, organize, view, and download educational materials according to their university, faculty, degree level, major, academic year, semester, subject, and professor." />
+    <meta property="og:title" content="e-learning — University Platform" />
+    <meta property="og:description" content="A complete, modern, multilingual university learning platform where students find, organize, view, and download educational materials according to their university, faculty, degree level, major, academic year, semester, subject, and professor." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      // Allow browser extensions & interceptors to set window.fetch without throwing
+      // "TypeError: Cannot set property fetch of #<Window> which has only a getter"
+      (function() {
+        try {
+          var realFetch = window.fetch ? window.fetch.bind(window) : undefined;
+          Object.defineProperty(window, 'fetch', {
+            get: function() { return realFetch; },
+            set: function(fn) { realFetch = fn; },
+            configurable: true,
+            enumerable: true,
+          });
+        } catch (e) {}
+
+        // Suppress benign Vite HMR WebSocket unhandled rejections in cloud proxy/iframe environments
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event.reason;
+          var msg = reason && (reason.message || reason);
+          if (typeof msg === 'string' && (msg.includes('WebSocket') || msg.includes('ws://') || msg.includes('wss://'))) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        });
+        window.addEventListener('error', function(event) {
+          var msg = event.message;
+          if (typeof msg === 'string' && (msg.includes('WebSocket') || msg.includes('failed to connect to websocket'))) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        });
+
+        // Strip browser extension injected attributes (e.g. bis_skin_checked)
+        function clean(node) {
+          if (!node || node.nodeType !== 1) return;
+          var attrs = node.attributes;
+          for (var i = attrs.length - 1; i >= 0; i--) {
+            if (attrs[i].name.startsWith('bis_')) node.removeAttribute(attrs[i].name);
+          }
+          for (var j = 0; j < node.children.length; j++) clean(node.children[j]);
+        }
+        clean(document.documentElement);
+        new MutationObserver(function(mutations) {
+          for (var i = 0; i < mutations.length; i++) {
+            var m = mutations[i];
+            if (m.type === 'attributes' && m.attributeName && m.attributeName.startsWith('bis_')) {
+              m.target.removeAttribute(m.attributeName);
+            }
+          }
+        }).observe(document.documentElement, { attributes: true, subtree: true });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
